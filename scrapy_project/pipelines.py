@@ -74,96 +74,149 @@ class BookscraperPipeline:
         return item
 
 
-import mysql.connector
+#cleaning myteck data 
+import re
 
-class SaveToMySQLPipeline:
-
-    def __init__(self):
-        self.conn = mysql.connector.connect(
-            host = 'localhost',
-            user = 'root',
-            password = '', #add your password here if you have one set 
-            database = 'books'
-        )
-
-        ## Create cursor, used to execute commands
-        self.cur = self.conn.cursor()
-
-        ## Create books table if none exists
-        self.cur.execute("""
-        CREATE TABLE IF NOT EXISTS books(
-            id int NOT NULL auto_increment, 
-            url VARCHAR(255),
-            title text,
-            upc VARCHAR(255),
-            product_type VARCHAR(255),
-            price_excl_tax DECIMAL,
-            price_incl_tax DECIMAL,
-            tax DECIMAL,
-            price DECIMAL,
-            availability INTEGER,
-            num_reviews INTEGER,
-            stars INTEGER,
-            category VARCHAR(255),
-            description text,
-            PRIMARY KEY (id)
-        )
-        """)
+class CleanMytekPipeline:
 
     def process_item(self, item, spider):
 
-        ## Define insert statement
-        self.cur.execute(""" insert into books (
-            url, 
-            title, 
-            upc, 
-            product_type, 
-            price_excl_tax,
-            price_incl_tax,
-            tax,
-            price,
-            availability,
-            num_reviews,
-            stars,
-            category,
-            description
-            ) values (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s
-                )""", (
-            item["url"],
-            item["title"],
-            item["upc"],
-            item["product_type"],
-            item["price_excl_tax"],
-            item["price_incl_tax"],
-            item["tax"],
-            item["price"],
-            item["availability"],
-            item["num_reviews"],
-            item["stars"],
-            item["category"],
-            str(item["description"][0])
-        ))
+        # ---- Clean Title ----
+        if item.get("title"):
+            item["title"] = item["title"].strip()
 
-        # ## Execute insert of data into database
-        self.conn.commit()
+        # ---- Clean Price ----
+        raw_price = item.get("price", "")
+        # remove unicode narrow no-break space (\u202f) and normal spaces
+        raw_price = raw_price.replace("\u202f", "").replace(" ", "")
+
+        # extract numeric part
+        match = re.search(r"([\d,.]+)", raw_price)
+        if match:
+            price_str = match.group(1).replace(",", ".")
+            try:
+                item["price"] = float(price_str)
+            except:
+                item["price"] = None
+        else:
+            item["price"] = None
+
+        # extract currency (DT)
+        if "DT" in raw_price.upper():
+            item["price_currency"] = "DT"
+        else:
+            item["price_currency"] = None
+
+        # ---- Clean SKU ----
+        if item.get("sku"):
+            item["sku"] = item["sku"].replace("[", "").replace("]", "").strip()
+
+        # ---- Normalise availability ----
+        if item.get("availability"):
+            avail = item["availability"].lower()
+
+            if "stock" in avail:
+                item["availability"] = "In stock"
+            elif "rupture" in avail or "épuisé" in avail:
+                item["availability"] = "Out of stock"
+            else:
+                item["availability"] = "Unknown"
+
+        # ---- Clean description ----
+        if item.get("short_description"):
+            desc = item["short_description"]
+
+            desc = re.sub(r"\s+", " ", desc)  # remove newlines & excess spaces
+            desc = desc.strip()
+            item["short_description"] = desc
+
         return item
 
     
-    def close_spider(self, spider):
 
-        ## Close cursor & connection to database 
-        self.cur.close()
+
+
+
+# postgres database for myteck spider 
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+
+class PostgresPipeline:
+    def __init__(self, pg_host, pg_db, pg_user, pg_pass, pg_port):
+        self.pg_host = pg_host
+        self.pg_db = pg_db
+        self.pg_user = pg_user
+        self.pg_pass = pg_pass
+        self.pg_port = pg_port
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(
+            pg_host=crawler.settings.get("PG_HOST"),
+            pg_db=crawler.settings.get("PG_DATABASE"),
+            pg_user=crawler.settings.get("PG_USER"),
+            pg_pass=crawler.settings.get("PG_PASSWORD"),
+            pg_port=crawler.settings.get("PG_PORT"),
+        )
+
+    def open_spider(self, spider):
+        """Open PostgreSQL connection when spider opens"""
+        self.conn = psycopg2.connect(
+            host=self.pg_host,
+            database=self.pg_db,
+            user=self.pg_user,
+            password=self.pg_pass,
+            port=self.pg_port
+        )
+        self.cursor = self.conn.cursor()
+        spider.logger.info("Connected to PostgreSQL successfully.")
+
+    def close_spider(self, spider):
+        """Close DB connection when spider closes"""
+        self.conn.commit()
+        self.cursor.close()
         self.conn.close()
+        spider.logger.info("PostgreSQL connection closed.")
+
+    def process_item(self, item, spider):
+        """Insert scraped item into PostgreSQL"""
+
+        sql = """
+            INSERT INTO products (
+                title, price, image, url, availability,
+                short_description, category, price_currency
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (url) DO UPDATE SET
+                title = EXCLUDED.title,
+                price = EXCLUDED.price,
+                image = EXCLUDED.image,
+                availability = EXCLUDED.availability,
+                short_description = EXCLUDED.short_description,
+                category = EXCLUDED.category,
+                price_currency = EXCLUDED.price_currency;
+        """
+
+        values = (
+            item.get("title"),
+            item.get("price"),
+            item.get("image"),
+            item.get("url"),
+            item.get("availability"),
+            item.get("short_description"),
+            item.get("category"),
+            item.get("price_currency"),
+        )
+
+        try:
+            self.cursor.execute(sql, values)
+            self.conn.commit()
+        except Exception as e:
+            spider.logger.error(f"Failed to insert item: {e}")
+            self.conn.rollback()
+
+        return item
+
+

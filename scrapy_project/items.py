@@ -29,3 +29,19 @@ class BookItem(scrapy.Item):
    category = scrapy.Field()
    description = scrapy.Field()
    price = scrapy.Field()
+
+
+
+# -----------------------
+# MYTECK ITEM CLASS
+# -----------------------
+class MytekItem(scrapy.Item):
+
+    title = scrapy.Field()
+    price = scrapy.Field()
+    image = scrapy.Field()
+    url = scrapy.Field()
+    availability = scrapy.Field()
+    short_description = scrapy.Field()
+    category = scrapy.Field()
+

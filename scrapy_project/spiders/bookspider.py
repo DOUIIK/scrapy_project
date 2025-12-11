@@ -13,9 +13,8 @@ class BookspiderSpider(scrapy.Spider):
         }
     }
 
-
     def parse(self, response):
-        
+
         books = response.css('article.product_pod')
 
         for book in books:
