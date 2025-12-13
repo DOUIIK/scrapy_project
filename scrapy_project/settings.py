@@ -63,31 +63,34 @@ ROBOTSTXT_OBEY = False
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-# DOWNLOADER_MIDDLEWARES = {
+DOWNLOADER_MIDDLEWARES = {
 #      'scrapy_project.middlewares.BookscraperDownloaderMiddleware': 500,
-    # 'scrapy_project.middlewares.ScrapeOpsFakeBrowserHeaderAgentMiddleware':520 ,
+     'scrapy_project.middlewares.ScrapeOpsFakeBrowserHeaderAgentMiddleware':520 ,
     # 'scrapy_project.middlewares.ScrapeOpsFakeUserAgentMiddleware' : 530 ,
     # 'rotating-proxies-middlewares.RotatingProxyMiddleware' : 500 ,
     # 'rotating-proxies-middlewares.BanDetectionMiddleware' : 510
     #'scrapeops_scrapy_proxy_sdk.middlewares.ScrapeOpsScrapyProxySDK': 725,
     #'scrapeops_scrapy_proxy_sdk.scrapeops_scrapy_proxy_sdk.ScrapeOpsScrapyProxySdkMiddleware': 725
 
-# }
+ }
 
 # Enable Playwright download handler
-# DOWNLOAD_HANDLERS = {
-#     "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
-#     "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
-# }
+DOWNLOAD_HANDLERS = {
+    "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+    "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+}
 
 # Use asyncio reactor (required for Playwright)
-#TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
+TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 
 # Optional: choose browser type
 PLAYWRIGHT_BROWSER_TYPE = "chromium"
 PLAYWRIGHT_LAUNCH_OPTIONS = {
     "headless": True,
 }
+
+CONCURRENT_REQUESTS = 4
+DOWNLOAD_DELAY = 2
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -102,8 +105,8 @@ ITEM_PIPELINES = {
 #    'bookscraper.pipelines.SaveToMySQLPipeline': 400,
   #  "mytek_spider.pipelines.MytekPipeline": 300,
     #"scrapy_project.pipelines.PostgreSQLPipeline": 320 ,
-    "scrapy_project.pipelines.CleanMytekPipeline": 300,
-    "scrapy_project.pipelines.PostgresPipeline": 320
+    # "scrapy_project.pipelines.CleanMytekPipeline": 300,
+    # "scrapy_project.pipelines.PostgresPipeline": 320
 }
 
 
